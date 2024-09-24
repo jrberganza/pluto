@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "5.0",
-    "importsNotUsedAsValues": "error",
     "isolatedModules": true,
-    "preserveValueImports": true,
+    "verbatimModuleSyntax": null,
     "lib": ["esnext"],
     "moduleResolution": "node",
     "module": "esnext",
     "target": "esnext",
-    "noEmit": true,
+    "outDir": "dist",
+    "declaration": true,
     "allowJs": true,
     "checkJs": true,
     "esModuleInterop": true,

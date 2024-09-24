@@ -15,7 +15,7 @@ import { Node, type Origin } from "../node";
 import { TaggedFields } from "../taggedfields";
 import { App } from "./app";
 
-type Group = {
+export type Group = {
   interest: string; // uuid
   name: string; // uuid
   accessKey: Buffer;
@@ -29,8 +29,6 @@ type Group = {
 };
 
 export class BaseApp extends App {
-  node: Node;
-
   peers: Map<string, Node> = new Map(); // Keyed by readable identity
   secureChannels: Map<
     string,
@@ -43,7 +41,7 @@ export class BaseApp extends App {
   knownGroups: {
     interest: string;
     name: string;
-    announcers: Set<string>;
+    announcers: Map<string, Node>;
   }[] = [];
   ownGroups: Group[] = [];
 
@@ -58,11 +56,6 @@ export class BaseApp extends App {
       next: () => void
     ) => void;
   }[] = [];
-
-  constructor(node: Node) {
-    super(node);
-    this.node = node;
-  }
 
   mount(): void {
     this.node.onMessage(
@@ -264,13 +257,13 @@ export class BaseApp extends App {
 
   createGroup(
     interest: string,
-    name: string,
+    groupName: string,
     accessKey: string | Buffer,
     announce: boolean = false
   ) {
     const group: Group = {
       interest,
-      name,
+      name: groupName,
       accessKey: Buffer.from(accessKey),
       leader: {
         failureTimeout: null,
@@ -283,22 +276,22 @@ export class BaseApp extends App {
       members: new Map(),
     };
     this.ownGroups.push(group);
-    if (announce) this.ANNOUNCE_GROUP(null, interest, name);
+    if (announce) this.ANNOUNCE_GROUP(null, interest, groupName);
   }
 
-  getGroup(interest: string, name: string): Group | undefined {
+  getGroup(interest: string, groupName: string): Group | undefined {
     const group = this.ownGroups.find(
-      (g) => g.interest === interest && g.name === name
+      (g) => g.interest === interest && g.name === groupName
     );
     return group;
   }
 
-  sendToGroup(interest: string, name: string, fields: TaggedFields) {
-    const group = this.getGroup(interest, name);
+  sendToGroup(interest: string, groupName: string, fields: TaggedFields) {
+    const group = this.getGroup(interest, groupName);
     if (!group) return;
 
-    fields.clearAndSet("intr", Buffer.from(parse(interest)));
-    fields.clearAndSet("name", Buffer.from(parse(name)));
+    fields.clearAndSet("gint", Buffer.from(parse(interest)));
+    fields.clearAndSet("gnme", Buffer.from(parse(groupName)));
 
     if (
       group.leader.identity.toReadable() === this.node.identity.toReadable()
@@ -306,11 +299,11 @@ export class BaseApp extends App {
       for (const [, member] of group.members) {
         this.node.sendTo(member, fields, true);
       }
-      this.node.sendTo(this.node, fields);
+      this.node.sendTo(this.node, fields, true);
     } else {
       const peer = this.peers.get(group.leader.identity.toReadable());
       if (!peer) return;
-      this.node.sendTo(peer, fields);
+      this.node.sendTo(peer, fields, true);
     }
   }
 
@@ -326,13 +319,23 @@ export class BaseApp extends App {
     ) => void
   ) {
     this.node.onMessage(type, typeName, (origin, fields, next) => {
-      if (!fields.get("intr") || !fields.get("name")) return next();
+      if (!fields.get("gint") || !fields.get("gnme")) return next();
 
-      const mInterest = stringify(fields.get("intr")!);
+      const mInterest = stringify(fields.get("gint")!);
       if (mInterest !== interest) return next();
-      const name = stringify(fields.get("name")!);
+      const gnme = stringify(fields.get("gnme")!);
+      const gadd = fields.get("gadd")?.toString() ?? origin.address;
+      const gkey =
+        fields.get("gkey")?.toString() ?? origin.identity.toReadable();
+      fields.add("gadd", gadd);
+      fields.add("gkey", gkey);
 
-      const group = this.getGroup(mInterest, name);
+      const groupOrigin = {
+        address: gadd,
+        identity: Identity.fromReadable(gkey),
+      };
+
+      const group = this.getGroup(mInterest, gnme);
       if (!group) return next();
 
       if (
@@ -345,7 +348,7 @@ export class BaseApp extends App {
         }
       }
 
-      handler(origin, group, fields, next);
+      handler(groupOrigin, group, fields, next);
     });
   }
 
@@ -434,37 +437,39 @@ export class BaseApp extends App {
   ANNOUNCE_GROUP(
     dest: Node | null,
     interest: string | Buffer,
-    name: string | Buffer
+    groupName: string | Buffer
   ) {
     const bufInterest =
       typeof interest === "string" ? Buffer.from(parse(interest)) : interest;
-    const bufName = typeof name === "string" ? Buffer.from(parse(name)) : name;
+    const bufName =
+      typeof groupName === "string" ? Buffer.from(parse(groupName)) : groupName;
 
     this.node.sendTo(
       dest,
       TaggedFields.from({
         type: BaseApp.ANNOUNCE_GROUP,
-        intr: bufInterest,
-        name: bufName,
+        gint: bufInterest,
+        gnme: bufName,
       })
     );
   }
 
   ANNOUNCE_GROUP_HANDLER(origin: Origin, fields: TaggedFields) {
-    const interest = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const interest = stringify(fields.get("gint")!);
+    const groupName = stringify(fields.get("gnme")!);
 
-    const announcer = origin.identity.toReadable();
+    const announcerIdentity = origin.identity.toReadable();
+    const announcer = this.getPeer(origin).peer;
     const foundGroup = this.knownGroups.find(
-      (g) => g.interest === interest && g.name === name
+      (g) => g.interest === interest && g.name === groupName
     );
     if (foundGroup) {
-      foundGroup.announcers.add(announcer);
+      foundGroup.announcers.set(announcerIdentity, announcer);
     } else {
       this.knownGroups.push({
         interest,
-        name,
-        announcers: new Set([announcer]),
+        name: groupName,
+        announcers: new Map([[announcerIdentity, announcer]]),
       });
     }
   }
@@ -477,19 +482,20 @@ export class BaseApp extends App {
     joiningAddress: string | null,
     joiningIdentity: string | null,
     interest: string | Buffer,
-    name: string | Buffer,
+    groupName: string | Buffer,
     accessKey: string | Buffer
   ) {
     const bufInterest =
       typeof interest === "string" ? Buffer.from(parse(interest)) : interest;
-    const bufName = typeof name === "string" ? Buffer.from(parse(name)) : name;
+    const bufName =
+      typeof groupName === "string" ? Buffer.from(parse(groupName)) : groupName;
     const bufAccessKey =
       typeof accessKey === "string" ? Buffer.from(accessKey) : accessKey;
 
     const fields = TaggedFields.from({
       type: BaseApp.JOIN_GROUP,
-      intr: bufInterest,
-      name: bufName,
+      gint: bufInterest,
+      gnme: bufName,
       akey: bufAccessKey,
     });
 
@@ -502,11 +508,11 @@ export class BaseApp extends App {
   JOIN_GROUP_HANDLER(origin: Origin, fields: TaggedFields) {
     const oadd = fields.get("oadd")?.toString() ?? origin.address;
     const okey = fields.get("okey")?.toString() ?? origin.identity.toReadable();
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const akey = fields.get("akey")!;
 
-    const group = this.getGroup(intr, name);
+    const group = this.getGroup(gint, gnme);
     if (!group) return;
     if (!akey.equals(group.accessKey)) return;
 
@@ -531,7 +537,7 @@ export class BaseApp extends App {
         identity: group.leader.identity,
         address: null,
       });
-      this.JOIN_GROUP(peer, oadd, okey, intr, name, akey);
+      this.JOIN_GROUP(peer, oadd, okey, gint, gnme, akey);
     }
   }
 
@@ -541,8 +547,8 @@ export class BaseApp extends App {
   ACCEPT_JOIN_REQUEST(dest: Node, group: Group) {
     const fields = TaggedFields.from({
       type: BaseApp.ACCEPT_JOIN_REQUEST,
-      intr: Buffer.from(parse(group.interest)),
-      name: Buffer.from(parse(group.name)),
+      gint: Buffer.from(parse(group.interest)),
+      gnme: Buffer.from(parse(group.name)),
       akey: group.accessKey,
     });
     for (const [readableIdentity, peer] of group.members) {
@@ -557,8 +563,8 @@ export class BaseApp extends App {
   }
 
   ACCEPT_JOIN_REQUEST_HANDLER(origin: Origin, fields: TaggedFields) {
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const akey = fields.get("akey")!;
 
     const members = new Map<string, Node>();
@@ -572,8 +578,8 @@ export class BaseApp extends App {
     members.set(origin.identity.toReadable(), this.getPeer(origin).peer);
 
     const group: Group = {
-      interest: intr,
-      name,
+      interest: gint,
+      name: gnme,
       accessKey: akey,
       leader: {
         failureTimeout: setTimeout(() => {
@@ -603,8 +609,8 @@ export class BaseApp extends App {
       dest,
       TaggedFields.from({
         type: BaseApp.ANNOUNCE_MEMBER,
-        intr: Buffer.from(parse(group.interest)),
-        name: Buffer.from(parse(group.name)),
+        gint: Buffer.from(parse(group.interest)),
+        gnme: Buffer.from(parse(group.name)),
         oadd: address,
         okey: identity.toReadable(),
       }),
@@ -613,12 +619,12 @@ export class BaseApp extends App {
   }
 
   ANNOUNCE_MEMBER_HANDLER(origin: Origin, fields: TaggedFields) {
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const oadd = fields.get("oadd")!.toString();
     const okey = fields.get("okey")!.toString();
 
-    const group = this.getGroup(intr, name);
+    const group = this.getGroup(gint, gnme);
     if (!group) return;
 
     group.members.set(
@@ -634,8 +640,8 @@ export class BaseApp extends App {
       dest,
       TaggedFields.from({
         type: BaseApp.HEARTBEAT,
-        intr: Buffer.from(parse(group.interest)),
-        name: Buffer.from(parse(group.name)),
+        gint: Buffer.from(parse(group.interest)),
+        gnme: Buffer.from(parse(group.name)),
         time: intToBufferBE(Math.floor(Date.now() / 1000), true, 8),
       }),
       true
@@ -643,11 +649,11 @@ export class BaseApp extends App {
   }
 
   HEARTBEAT_HANDLER(origin: Origin, fields: TaggedFields) {
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const beaterIdentity = origin.identity;
 
-    const group = this.getGroup(intr, name);
+    const group = this.getGroup(gint, gnme);
     if (!group) return;
     if (beaterIdentity.toReadable() !== group.leader.identity.toReadable())
       return;
@@ -661,8 +667,8 @@ export class BaseApp extends App {
       dest,
       TaggedFields.from({
         type: BaseApp.CAMPAIGN,
-        intr: Buffer.from(parse(group.interest)),
-        name: Buffer.from(parse(group.name)),
+        gint: Buffer.from(parse(group.interest)),
+        gnme: Buffer.from(parse(group.name)),
         time: intToBufferBE(Math.floor(Date.now() / 1000), true, 8),
       }),
       true
@@ -670,11 +676,11 @@ export class BaseApp extends App {
   }
 
   CAMPAIGN_HANDLER(origin: Origin, fields: TaggedFields) {
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const beaterIdentity = origin.identity;
 
-    const group = this.getGroup(intr, name);
+    const group = this.getGroup(gint, gnme);
     if (!group) return;
 
     this.setLeader(group, beaterIdentity);
@@ -687,8 +693,8 @@ export class BaseApp extends App {
       dest,
       TaggedFields.from({
         type: BaseApp.RECOGNIZE,
-        intr: Buffer.from(parse(group.interest)),
-        name: Buffer.from(parse(group.name)),
+        gint: Buffer.from(parse(group.interest)),
+        gnme: Buffer.from(parse(group.name)),
         time: intToBufferBE(Math.floor(Date.now() / 1000), true, 8),
       }),
       true
@@ -696,11 +702,11 @@ export class BaseApp extends App {
   }
 
   RECOGNIZE_HANDLER(origin: Origin, fields: TaggedFields) {
-    const intr = stringify(fields.get("intr")!);
-    const name = stringify(fields.get("name")!);
+    const gint = stringify(fields.get("gint")!);
+    const gnme = stringify(fields.get("gnme")!);
     const recognizerIdentity = origin.identity.toReadable();
 
-    const group = this.getGroup(intr, name);
+    const group = this.getGroup(gint, gnme);
     if (!group) return;
 
     group.leader.recognition!.add(recognizerIdentity);

@@ -39,11 +39,14 @@ export class Node {
     ) => Buffer | null;
   }>;
 
+  debugLog: boolean;
+
   constructor(opts: {
     addresses: Set<string>;
     identity: Identity;
     socket?: Socket;
     multicastSocket?: Socket;
+    debugLog?: boolean;
   }) {
     this.addresses = opts.addresses;
     this.identity = opts.identity;
@@ -54,6 +57,7 @@ export class Node {
     this.messageListeners = [];
     this.listeningListeners = new Set();
     this.encryptionHandlers = new Set();
+    this.debugLog = opts.debugLog ?? false;
   }
 
   static async me(identity: Identity) {
@@ -158,12 +162,14 @@ export class Node {
     const fields = TaggedFields.deserialize(data);
 
     const bufType = fields.get("type") ?? null;
-    console.log(
-      `@${this.identity.toReadable()} received ${(bufType
-        ? this.typeNames[bufType.toString("hex")] ?? bufType.toString("hex")
-        : "<null>"
-      ).padEnd(36, " ")} from @${originIdentity.toReadable()}`
-    );
+    if (this.debugLog) {
+      console.log(
+        `@${this.identity.toReadable()} received ${(bufType
+          ? this.typeNames[bufType.toString("hex")] ?? bufType.toString("hex")
+          : "<null>"
+        ).padEnd(36, " ")} from @${originIdentity.toReadable()}`
+      );
+    }
 
     const origin = {
       address: rinfo.address + ":" + rinfo.port,
@@ -250,13 +256,15 @@ export class Node {
       if (forceEncryption && !encrypted) return;
     }
 
-    console.log(
-      `@${this.identity.toReadable()} sent     ${(fields.get("type")
-        ? this.typeNames[fields.get("type")!.toString("hex")] ??
-          fields.get("type")!.toString("hex")
-        : "<null>"
-      ).padEnd(36, " ")} to   @${to?.identity?.toReadable() ?? "everyone"}`
-    );
+    if (this.debugLog) {
+      console.log(
+        `@${this.identity.toReadable()} sent     ${(fields.get("type")
+          ? this.typeNames[fields.get("type")!.toString("hex")] ??
+            fields.get("type")!.toString("hex")
+          : "<null>"
+        ).padEnd(36, " ")} to   @${to?.identity?.toReadable() ?? "everyone"}`
+      );
+    }
 
     for (const fullAddr of destAddr) {
       const [addr, port] = fullAddr.split(":");
