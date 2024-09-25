@@ -1,5 +1,5 @@
-export { App } from "./apps/app";
-export { BaseApp, type Group } from "./apps/base";
-export { Identity, MissingPrivateKey, UnsupportedKeyType } from "./identity";
-export { Node, type Origin } from "./node";
-export { TaggedFields } from "./taggedfields";
+export { App } from "./apps/app.js";
+export { BaseApp, type Group } from "./apps/base.js";
+export { Identity, MissingPrivateKey, UnsupportedKeyType } from "./identity.js";
+export { Node, type Origin } from "./node.js";
+export { TaggedFields } from "./taggedfields.js";

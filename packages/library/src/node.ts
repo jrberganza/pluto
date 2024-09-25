@@ -1,6 +1,6 @@
 import { createSocket, type RemoteInfo, Socket } from "dgram";
-import { Identity } from "./identity";
-import { TaggedFields } from "./taggedfields";
+import { Identity } from "./identity.js";
+import { TaggedFields } from "./taggedfields.js";
 
 const MULTICAST_ADDRESS = "225.0.0.1";
 const HOST_INTERFACE = "0.0.0.0";

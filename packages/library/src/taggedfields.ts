@@ -1,4 +1,4 @@
-import { bufferToIntBE, intToBufferBE } from "./buffer";
+import { bufferToIntBE, intToBufferBE } from "./buffer.js";
 
 const TAG_BYTE_LENGTH = 4;
 const SIZE_BYTE_LENGTH = 4;

@@ -1,5 +1,5 @@
-import { intToBufferBE } from "$/buffer";
-import { Identity } from "$/identity";
+import { intToBufferBE } from "$/buffer.js";
+import { Identity } from "$/identity.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -11,9 +11,9 @@ import {
   randomBytes,
 } from "crypto";
 import { parse, stringify } from "uuid";
-import { Node, type Origin } from "../node";
-import { TaggedFields } from "../taggedfields";
-import { App } from "./app";
+import { Node, type Origin } from "../node.js";
+import { TaggedFields } from "../taggedfields.js";
+import { App } from "./app.js";
 
 export type Group = {
   interest: string; // uuid
