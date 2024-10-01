@@ -1,6 +1,6 @@
 import { BaseApp, Identity, Node } from "library";
 import { resolve } from "node:path";
-import { ChatApp } from "./chat";
+import { ChatApp } from "library";
 
 const nodes: Record<
   string,

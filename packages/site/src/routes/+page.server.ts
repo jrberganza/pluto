@@ -1,4 +1,4 @@
-import { ChatApp } from "$lib/server/chat";
+import { ChatApp } from "library";
 import type { PageServerLoad } from "./$types";
 
 export const load = (async ({ locals }) => {

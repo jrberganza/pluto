@@ -1,12 +1,8 @@
-import {
-  App,
-  BaseApp,
-  Node,
-  TaggedFields,
-  type Group,
-  type Origin,
-} from "library";
+import { Node, Origin } from "$/node.js";
+import { TaggedFields } from "$/taggedfields.js";
 import { parse, v7 } from "uuid";
+import { App } from "./app.js";
+import { BaseApp, Group } from "./base.js";
 
 export class ChatApp extends App {
   baseApp: BaseApp;

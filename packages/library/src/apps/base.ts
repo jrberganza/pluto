@@ -57,6 +57,8 @@ export class BaseApp extends App {
     ) => void;
   }[] = [];
 
+  discoverIntervalEnabled: boolean = true;
+
   mount(): void {
     this.node.onMessage(
       BaseApp.DISCOVER,
@@ -146,9 +148,9 @@ export class BaseApp extends App {
 
     // Discovery
     this.node.onListening(() => {
-      this.DISCOVER();
+      if (this.discoverIntervalEnabled) this.DISCOVER();
       setInterval(() => {
-        this.DISCOVER();
+        if (this.discoverIntervalEnabled) this.DISCOVER();
       }, 1000);
     });
   }
@@ -193,7 +195,7 @@ export class BaseApp extends App {
   }
 
   static heartbeatIntervalMs = 1000;
-  static failureTimeoutMs = BaseApp.heartbeatIntervalMs * 1.1;
+  static failureTimeoutMs = BaseApp.heartbeatIntervalMs * 1000;
   static failureJitter = BaseApp.failureTimeoutMs * 0.1;
   setLeader(group: Group, identity: Identity) {
     if (group.leader.identity.toReadable() === identity.toReadable()) return;

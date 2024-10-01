@@ -98,7 +98,7 @@ export class Node {
     socket.setBroadcast(false);
 
     const bindedPort = socket.address();
-    node.addresses.add(bindedPort.address + ":" + bindedPort.port);
+    node.addresses.add("127.0.0.1:" + bindedPort.port);
 
     return node;
   }
@@ -163,7 +163,7 @@ export class Node {
 
     const bufType = fields.get("type") ?? null;
     if (this.debugLog) {
-      console.log(
+      console.error(
         `@${this.identity.toReadable()} received ${(bufType
           ? this.typeNames[bufType.toString("hex")] ?? bufType.toString("hex")
           : "<null>"
@@ -257,7 +257,7 @@ export class Node {
     }
 
     if (this.debugLog) {
-      console.log(
+      console.error(
         `@${this.identity.toReadable()} sent     ${(fields.get("type")
           ? this.typeNames[fields.get("type")!.toString("hex")] ??
             fields.get("type")!.toString("hex")

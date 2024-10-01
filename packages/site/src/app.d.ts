@@ -1,7 +1,6 @@
 // See https://kit.svelte.dev/docs/types#app
 
-import type { ChatApp } from "$lib/server/chat";
-import type { BaseApp, Node } from "library";
+import type { ChatApp, BaseApp, Node } from "library";
 
 // for information about these interfaces
 declare global {

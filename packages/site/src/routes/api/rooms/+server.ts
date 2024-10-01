@@ -1,4 +1,4 @@
-import { ChatApp } from "$lib/server/chat";
+import { ChatApp } from "library";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = ({ locals }) => {
