@@ -60,7 +60,7 @@ export class Node {
     this.debugLog = opts.debugLog ?? false;
   }
 
-  static async me(identity: Identity) {
+  static async me(identity: Identity, { port }: { port?: number } = {}) {
     const multicastSocket = createSocket({
       type: "udp4",
       reuseAddr: true,
@@ -92,13 +92,13 @@ export class Node {
     socket.on("message", node.messageHandler.bind(node));
 
     await new Promise<void>((resolve) =>
-      socket.bind(0, HOST_INTERFACE, resolve)
+      socket.bind(port ?? 0, HOST_INTERFACE, resolve)
     );
 
     socket.setBroadcast(false);
 
-    const bindedPort = socket.address();
-    node.addresses.add("127.0.0.1:" + bindedPort.port);
+    const bindedAdress = socket.address();
+    node.addresses.add("127.0.0.1:" + bindedAdress.port);
 
     return node;
   }
