@@ -1,19 +1,20 @@
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const config = JSON.parse(readFileSync("./data/config.json", "utf-8"));
+const nodeExec = process.argv[0];
+
 const scriptPath = `${__dirname}/script.js`;
-function runScript(name, createsGroup, totalRooms, totalNodes) {
+function runScript(name, createsGroup) {
   return new Promise((resolve) => {
-    const scriptProc = spawn(process.argv[0], [
+    const scriptProc = spawn(nodeExec, [
       scriptPath,
       name,
       createsGroup.toString(),
-      totalRooms.toString(),
-      totalNodes.toString(),
     ]);
     let result = "";
     scriptProc.stdout.on("data", (data) => {
@@ -28,12 +29,11 @@ function runScript(name, createsGroup, totalRooms, totalNodes) {
   });
 }
 
-const numNodes = parseInt(process.argv[2], 10);
-
 const nodeScripts = [];
-console.log(`Starting ${numNodes} nodes...`);
-for (let i = 0; i < numNodes; i++) {
-  nodeScripts.push(runScript(i.toString(), i === 0, 1, numNodes));
+console.log(`Starting ${config.numNodes} nodes...`);
+for (let i = 0; i < config.numNodes; i++) {
+  let k = i + config.offset;
+  nodeScripts.push(runScript(k.toString(), k === 0));
 }
 console.log("Waiting for them to finish...");
 const results = await Promise.all(nodeScripts);
@@ -43,6 +43,6 @@ writeFileSync(
   JSON.stringify(
     results.map((r) => JSON.parse(r)),
     null,
-    2,
-  ),
+    2
+  )
 );

@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync } from "fs";
 import { BaseApp, ChatApp, Identity, Node, TaggedFields } from "library";
+
+const config = JSON.parse(readFileSync("./data/config.json", "utf-8"));
 
 function waitUntil(func, checkInterval) {
   return new Promise((resolve) => {
@@ -23,15 +25,25 @@ if (!existsSync("./data")) {
 
 const identityName = process.argv[2] ?? Date.now().toString();
 const createRooms = process.argv[3] === "true";
-const totalRooms = parseInt(process.argv[4], 10);
-const totalNodes = parseInt(process.argv[5], 10);
+const totalRooms = config.totalRooms;
+const totalNodes = config.totalNodes;
 
-const node = await Node.me(Identity.loadOrGenSave(`./data/me_${identityName}`));
+const node = await Node.me(
+  Identity.loadOrGenSave(`./data/me_${identityName}`),
+  { port: createRooms ? 9976 : undefined }
+);
 const baseApp = new BaseApp(node);
 baseApp.discoverIntervalEnabled = false;
 baseApp.mount();
 const chatApp = new ChatApp(baseApp, `Nodo ${identityName}`);
 chatApp.mount();
+
+const roomCreator = createRooms
+  ? node
+  : baseApp.getPeer({
+      address: config.roomCreator.address,
+      identity: Identity.fromReadable(config.roomCreator.identity),
+    }).peer;
 
 const latencies = [];
 function ping() {
@@ -69,20 +81,23 @@ node.onMessage(PONG, "PONG", (_, fields) => {
 await delay(1 * 1000);
 
 if (createRooms) {
-  chatApp.createRoom();
+  chatApp.createRoom(config.roomId, undefined);
 }
 
 const joinInterval = setInterval(() => {
-  for (const room of chatApp.getRooms()) {
-    if (
-      baseApp.ownGroups.find(
-        (g) => g.interest === ChatApp.GUID && g.name === room
-      )
-    ) {
-      baseApp.ANNOUNCE_GROUP(null, ChatApp.GUID, room);
-    } else {
-      chatApp.joinRoom(room);
-    }
+  if (
+    !baseApp.ownGroups.find(
+      (g) => g.interest === ChatApp.GUID && g.name === config.roomId
+    )
+  ) {
+    baseApp.JOIN_GROUP(
+      roomCreator,
+      null,
+      null,
+      ChatApp.GUID,
+      config.roomId,
+      ""
+    );
   }
 }, 1 * 1000);
 
