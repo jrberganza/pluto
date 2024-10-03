@@ -64,13 +64,13 @@ export class ChatApp extends App {
     return Array.from(new Set([...knownNames, ...ownNames]));
   }
 
-  createRoom(password?: string): string {
-    const room = v7();
-    this.baseApp.createGroup(ChatApp.GUID, room, password ?? "", true);
-    return room;
+  createRoom(room: string | undefined, password: string | undefined): string {
+    const rroom = room ?? v7();
+    this.baseApp.createGroup(ChatApp.GUID, rroom, password ?? "", true);
+    return rroom;
   }
 
-  joinRoom(room: string, password?: string): boolean {
+  joinRoom(room: string, password: string | undefined): boolean {
     const group = this.baseApp.knownGroups.find(
       (g) => g.interest === ChatApp.GUID && g.name === room
     );
