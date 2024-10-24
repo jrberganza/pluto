@@ -133,7 +133,7 @@ const pingInterval = setInterval(() => {
 let messageTimedout = false;
 setTimeout(() => {
   messageTimedout = true;
-}, 120 * 1000);
+}, 60 * 1000);
 
 await waitUntil(() => {
   if (sent < 30) return false;
