@@ -97,6 +97,10 @@ importers:
       library:
         specifier: workspace:^
         version: link:../library
+    devDependencies:
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.5.4
 
 packages:
 
